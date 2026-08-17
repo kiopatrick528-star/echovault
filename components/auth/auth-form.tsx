@@ -2,16 +2,64 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AudioWaveform, Mail, Lock, User, ArrowRight, Headphones, Mic2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { supabase } from '@/lib/supabase'
 
 type Mode = 'login' | 'signup'
 type Role = 'user' | 'artist'
 
 export function AuthForm() {
+  const router = useRouter()
   const [mode, setMode] = useState<Mode>('login')
   const [role, setRole] = useState<Role>('user')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              role: role,
+            },
+          },
+        })
+
+        if (error) throw error
+
+        // Redirection après inscription
+        router.push('/dashboard/user')
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+
+        if (error) throw error
+
+        // Redirection après connexion
+        router.push('/dashboard/user')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Une erreur est survenue')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4 py-24">
@@ -52,10 +100,7 @@ export function AuthForm() {
           ))}
         </div>
 
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(e) => e.preventDefault()}
-        >
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <AnimatePresence mode="popLayout">
             {mode === 'signup' && (
               <motion.div
@@ -65,13 +110,35 @@ export function AuthForm() {
                 exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden"
               >
-                <Field icon={User} label="Nom d’artiste ou pseudo" type="text" placeholder="Nova" />
+                <Field
+                  icon={User}
+                  label="Nom d’artiste ou pseudo"
+                  type="text"
+                  placeholder="Nova"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
               </motion.div>
             )}
           </AnimatePresence>
 
-          <Field icon={Mail} label="Adresse e-mail" type="email" placeholder="nova@echovault.io" />
-          <Field icon={Lock} label="Mot de passe" type="password" placeholder="••••••••" />
+          <Field
+            icon={Mail}
+            label="Adresse e-mail"
+            type="email"
+            placeholder="nova@echovault.io"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <Field
+            icon={Lock}
+            label="Mot de passe"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
           <AnimatePresence mode="popLayout">
             {mode === 'signup' && (
@@ -103,12 +170,17 @@ export function AuthForm() {
             )}
           </AnimatePresence>
 
+          {error && (
+            <p className="text-sm text-red-400 text-center">{error}</p>
+          )}
+
           <button
             type="submit"
-            className="group mt-2 flex items-center justify-center gap-2 rounded-xl bg-cyan py-3 font-semibold text-primary-foreground transition-all hover:glow-cyan"
+            disabled={loading}
+            className="group mt-2 flex items-center justify-center gap-2 rounded-xl bg-cyan py-3 font-semibold text-primary-foreground transition-all hover:glow-cyan disabled:opacity-50"
           >
-            {mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            {loading ? 'Chargement...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+            {!loading && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
           </button>
         </form>
 
@@ -131,11 +203,15 @@ function Field({
   label,
   type,
   placeholder,
+  value,
+  onChange,
 }: {
   icon: typeof Mail
   label: string
   type: string
   placeholder: string
+  value?: string
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
     <label className="block">
@@ -145,6 +221,8 @@ function Field({
         <input
           type={type}
           placeholder={placeholder}
+          value={value}
+          onChange={onChange}
           className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/60 focus:border-cyan/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-cyan/30"
         />
       </span>
